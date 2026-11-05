@@ -9,6 +9,15 @@
 int gWidth = 800;
 int gHeight = 600;
 
+// Камера жаһандық айнымалылары[cite: 8]
+glm::vec3 camPos = glm::vec3(0.0f, 0.0f, 3.0f);
+glm::vec3 camFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 camUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+// Delta Time үшін уақыт айнымалылары
+float deltaTime = 0.0f;
+float lastFrame = 0.0f;
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     gWidth = width;
     gHeight = height;
@@ -48,7 +57,7 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(gWidth, gHeight, "Week 08 - Depth & Culling", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(gWidth, gHeight, "Week 09 - Camera & WASD", nullptr, nullptr);
     if (!window) {
         std::cerr << "OpenGL терезесі жасалмады!\n";
         glfwTerminate();
@@ -65,7 +74,6 @@ int main() {
         return -1;
     }
 
-    // 1. Тереңдік тестін және Back-face culling қосу (цикл сыртында, бір рет)[cite: 3, 4]
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
@@ -157,7 +165,6 @@ int main() {
     unsigned int locView = glGetUniformLocation(shaderProgram, "uView");
     unsigned int locProj = glGetUniformLocation(shaderProgram, "uProjection");
 
-    // 4. 5 әртүрлі позиция массивтері[cite: 3, 4]
     glm::vec3 positions[] = {
         glm::vec3( 0.0f,  0.0f,  0.0f),
         glm::vec3( 2.0f,  0.5f, -2.0f),
@@ -167,10 +174,38 @@ int main() {
     };
 
     while (!glfwWindowShouldClose(window)) {
+        // Delta Time есептеу
+        float currentFrame = (float)glfwGetTime();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
             glfwSetWindowShouldClose(window, true);
 
-        // 2. Буферді тазалау кезінде GL_DEPTH_BUFFER_BIT міндетті түрде қосылады
+        // 2. Пернетақтаны өңдеу (WASD, Space, Shift, Ctrl)[cite: 8, 9, 10]
+        float speed = 2.5f * deltaTime;
+        if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+            speed *= 2.0f; // 3-тапсырма: Жүгіру режимі
+
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+            camPos += speed * camFront;
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+            camPos -= speed * camFront;
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+            camPos -= glm::normalize(glm::cross(camFront, camUp)) * speed;
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+            camPos += glm::normalize(glm::cross(camFront, camUp)) * speed;
+
+        // 2-тапсырма: Жоғары-төмен қозғалыс (Space / Left Shift)
+        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+            camPos += speed * camUp;
+        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+            camPos -= speed * camUp;
+
+        // Қосымша: P пернесі арқылы камера координаттарын консольге шығару
+        if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS)
+            std::cout << "camPos: " << camPos.x << ", " << camPos.y << ", " << camPos.z << "\n";
+
         glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -178,14 +213,15 @@ int main() {
 
         float aspect = (float)gWidth / (float)gHeight;
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
-        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        
+        // 3. Динамикалық view матрицасы (LookAt)
+        glm::mat4 view = glm::lookAt(camPos, camPos + camFront, camUp);
 
         glUniformMatrix4fv(locProj, 1, GL_FALSE, glm::value_ptr(projection));
         glUniformMatrix4fv(locView, 1, GL_FALSE, glm::value_ptr(view));
 
         glBindVertexArray(VAO);
 
-        // 5. Цикл арқылы 5 кубты бөлек позицияда және түрлендіруде салу
         for (int i = 0; i < 5; i++) {
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::translate(model, positions[i]);
